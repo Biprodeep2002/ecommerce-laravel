@@ -2,6 +2,8 @@
 <html>
 <head>
     <title>Product Sales Report</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+
     <style>
         table {
             width: 80%;
@@ -30,6 +32,9 @@
 
         .back-link:hover {
             background-color: #333;
+        }
+        canvas {
+            border: 1px solid red;
         }
     </style>
 </head>
@@ -87,6 +92,69 @@
             @endforelse
         </tbody>
     </table>
+
+    <div class="chart-container">
+        <h2 style="text-align:center;">Order Price by Date (Chart)</h2>
+        <canvas id="ordersChart" height="100"></canvas>
+    </div>
+    
     <a href="{{ route('admin.orders') }}" class="back-link">Order List</a>
+    
+    {{-- <script src="https://cdn.jsdelivr.net/npm/chart.js"></script> --}}
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const ctx = document.getElementById('ordersChart')?.getContext('2d');
+            if (!ctx) {
+                console.error('Canvas not found!');
+                return;
+            }
+    
+            const labels = {!! json_encode($orderSummaries->pluck('order_date')) !!};
+            const data = {!! json_encode($orderSummaries->pluck('total_price')->map(fn($v) => (float) $v)) !!};
+    
+            new window.Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Total Price ($)',
+                        data: data,
+                        backgroundColor: 'rgba(75, 192, 192, 0.5)',
+                        borderColor: 'rgba(75, 192, 192, 1)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return '$' + context.formattedValue;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Order Date'
+                            }
+                        },
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'Total Price ($)'
+                            }
+                        }
+                    }
+                }
+            });
+        });
+    </script>
+    
 </body>
 </html>
