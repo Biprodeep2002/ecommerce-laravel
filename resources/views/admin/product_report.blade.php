@@ -97,6 +97,8 @@
         <h2 style="text-align:center;">Order Price by Date (Chart)</h2>
         <canvas id="ordersChart" height="100"></canvas>
     </div>
+
+    <br>
     
     <a href="{{ route('admin.orders') }}" class="back-link">Order List</a>
     
