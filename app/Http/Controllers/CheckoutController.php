@@ -8,6 +8,7 @@ use Stripe\Stripe;
 use Stripe\Checkout\Session as StripeSession;
 use App\Mail\OrderConfirmationMail;
 use Illuminate\Support\Facades\Mail;
+use App\Models\Models\Order;
 
 class CheckoutController extends Controller
 {
@@ -55,28 +56,25 @@ class CheckoutController extends Controller
         $userId = auth()->id();
         $total = array_sum(array_map(fn($item) => $item['price'] * $item['quantity'], $cart));
 
-        $orderId = DB::table('orders')->insertGetId([
-            'user_id' => $userId,
-            'total_amount' => $total,
-            //'status' => 'paid',
-            'created_at' => now(),
-            //'updated_at' => now(),
-        ]);
+        $order = new Order();
+        $order->user_id = $userId;
+        $order->total_amount = $total;
+        $order->save();
 
         foreach ($cart as $productId => $item) {
-            DB::table('order_items')->insert([
-                'order_id' => $orderId,
+            $order->orderItems()->create([
                 'product_id' => $productId,
                 'quantity' => $item['quantity'],
                 'price' => $item['price'],
             ]);
         }
+        
         $email = session()->get('checkout_email');
         if (!$email) {
             return redirect()->route('home')->with('error', 'Email not found.');
         }
         $user = auth()->user();
-        Mail::to($email)->send(new OrderConfirmationMail($user->username, $orderId, $cart, $total));
+        Mail::to($email)->send(new OrderConfirmationMail($user->username, $order->id, $cart, $total));
         session()->forget('checkout_email');
         session()->forget('cart');
         

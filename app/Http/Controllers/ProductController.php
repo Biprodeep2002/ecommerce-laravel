@@ -10,28 +10,27 @@ use App\Models\Models\DigitalData;
 use App\Models\Order;
 use App\Models\Models\OrderItem;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Arr;
+use App\Http\Requests\StoreProductRequest;
 
 class ProductController extends Controller
 {
-    //
-    
-
     public function index()
 {
-    // dd(auth()->user(), auth()->id());
-    $products = \DB::table('products')
-        ->join('categories', 'products.category_id', '=', 'categories.id')
-        ->leftJoin('physical_data', 'products.id', '=', 'physical_data.id')
-        ->leftJoin('digital_data', 'products.id', '=', 'digital_data.id')
-        ->select(
-            'products.id',
-            'products.name',
-            'products.price',
-            'categories.name as category',
-            'products.type',
-            \DB::raw("COALESCE(physical_data.weight, digital_data.filesize) as extra_info")
-        )
-        ->get();
+    $products = Product::with(['category', 'physicalData', 'digitalData'])
+    ->get()
+    ->map(function($product) {
+        return [
+            'id' => $product->id,
+            'name' => $product->name,
+            'price' => $product->price,
+            'category' => $product->category->name ?? null,
+            'type' => $product->type,
+            'extra_info' => $product->type === 'physical'
+                ? $product->physicalData->weight ?? null
+                : $product->digitalData->filesize ?? null,
+        ];
+    });
 
     return view('products.index', compact('products'));
 }
@@ -47,23 +46,16 @@ public function create()
     return view('products.form', ['categories' => $categories, 'product' => null]);
 }
 
-public function store(Request $request)
+public function store(StoreProductRequest $request)
 {
-    $request->validate([
-        'name' => 'required',
-        'price' => 'required|numeric',
-        'category_id' => 'required|exists:categories,id',
-        'type' => 'required|in:physical,digital',
-        'weight' => 'required_if:type,physical|nullable|numeric',
-        'filesize' => 'required_if:type,digital|nullable|numeric',
-    ]);
+    $validated=$request->validated();
 
-    $product = Product::create($request->only(['name', 'price', 'category_id', 'type']));
+    $product = Product::create(Arr::only($validated, ['name', 'price', 'category_id', 'type']));
 
-    if ($request->type === 'physical') {
-        PhysicalData::create(['id' => $product->id, 'weight' => $request->weight]);
+    if ($validated['type'] === 'physical') {
+        $product->physicaldata()->create(['weight' => $validated['weight']]);
     } else {
-        DigitalData::create(['id' => $product->id, 'filesize' => $request->filesize]);
+        $product->digitaldata(['filesize' => $validated['filesize']]);
     }
 
     return redirect()->route('home')->with('success', 'Product added.');
@@ -76,25 +68,18 @@ public function edit($id)
     return view('products.form', compact('product', 'categories'));
 }
 
-public function update(Request $request, $id)
+public function update(StoreProductRequest $request, $id)
 {
-    $request->validate([
-        'name' => 'required',
-        'price' => 'required|numeric',
-        'category_id' => 'required|exists:categories,id',
-        'type' => 'required|in:physical,digital',
-        'weight' => 'required_if:type,physical|nullable|numeric',
-        'filesize' => 'required_if:type,digital|nullable|numeric',
-    ]);
+    $validated=$request->validated();
 
     $product = Product::findOrFail($id);
-    $product->update($request->only(['name', 'price', 'category_id', 'type']));
+    $product->update(Arr::only($validated, ['name', 'price', 'category_id', 'type']));
 
-    if ($request->type === 'physical') {
-        $product->physicalData()->updateOrCreate(['id' => $product->id], ['weight' => $request->weight]);
+    if ($validated['type'] === 'physical') {
+        $product->physicalData()->updateOrCreate(['id' => $product->id], ['weight' => $validated['weight']]);
         $product->digitalData()->delete();
     } else {
-        $product->digitalData()->updateOrCreate(['id' => $product->id], ['filesize' => $request->filesize]);
+        $product->digitalData()->updateOrCreate(['id' => $product->id], ['filesize' => $validated['filesize']]);
         $product->physicalData()->delete();
     }
 
@@ -104,40 +89,22 @@ public function update(Request $request, $id)
 public function destroy($id)
 {
     $product = Product::findOrFail($id);
-    $product->physicalData()->delete();
-    $product->digitalData()->delete();
     $product->delete();
     return back()->with('success', 'Product deleted.');
 }
 public function productReport()
 {
-    // $user = Auth::user();
-    // if (!$user || $user->role !== 'admin') {
-    //     return redirect()->route('home')->with('error', 'Unauthorized');
-    // }
 
-    $report = \DB::table('products')
-    ->join('order_items', 'products.id', '=', 'order_items.product_id')
-    ->select('products.id', 'products.name', \DB::raw('SUM(order_items.quantity) as total_ordered'))
-    ->groupBy('products.id', 'products.name')
-    ->orderBy('total_ordered', 'desc')
+    $report = Product::withSum('orderItems as total_ordered', 'quantity')
+    ->orderByDesc('total_ordered')
+    ->get(['id', 'name']);
+
+    $orderSummaries = Order::selectRaw('DATE(created_at) as order_date')
+    ->selectRaw('GROUP_CONCAT(id ORDER BY id ASC) as order_numbers')
+    ->selectRaw('SUM(total_amount) as total_price')
+    ->groupByRaw('DATE(created_at)')
+    ->orderByDesc('order_date')
     ->get();
-
-    // $ordersByDate = \DB::table('orders')
-    //     ->join('users', 'orders.user_id', '=', 'users.id')
-    //     ->select('orders.*', 'users.username', \DB::raw('DATE(orders.created_at) as order_date'))
-    //     ->orderBy('orders.created_at', 'desc')
-    //     ->get()
-    //     ->groupBy('order_date'); // Grouped by date
-    $orderSummaries = \DB::table('orders')
-        ->select(
-            \DB::raw('DATE(created_at) as order_date'),
-            \DB::raw('GROUP_CONCAT(id ORDER BY id ASC) as order_numbers'),
-            \DB::raw('SUM(total_amount) as total_price')
-        )
-        ->groupBy(\DB::raw('DATE(created_at)'))
-        ->orderByDesc('order_date')
-        ->get();
 
 
     return view('admin.product_report', compact('report', 'orderSummaries'));

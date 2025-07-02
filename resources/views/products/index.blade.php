@@ -160,18 +160,18 @@
         <tbody>
             @foreach($products as $p)
                 <tr>
-                    <td>{{ $p->id }}</td>
-                    <td>{{ $p->name }}</td>
-                    <td>{{ number_format($p->price, 2) }}</td>
-                    <td>{{ $p->category }}</td>
-                    <td>{{ ucfirst($p->type) }}</td>
-                    <td>{{ $p->extra_info }}</td>
+                    <td>{{ $p['id'] }}</td>
+                    <td>{{ $p['name'] }}</td>
+                    <td>{{ number_format($p['price'], 2) }}</td>
+                    <td>{{ $p['category'] }}</td>
+                    <td>{{ ucfirst($p['type']) }}</td>
+                    <td>{{ $p['extra_info'] }}</td>
                     @if ($user && $user->role === 'admin')
                         <td>
-                            <form action="{{ route('products.edit', $p->id) }}" method="GET" style="display:inline;">
+                            <form action="{{ route('products.edit', $p['id']) }}" method="GET" style="display:inline;">
                                 <button type="submit">Edit</button>
                             </form>
-                            <form action="{{ route('products.destroy', $p->id) }}" method="POST" style="display:inline;">
+                            <form action="{{ route('products.destroy', $p['id']) }}" method="POST" style="display:inline;">
                                 @csrf
                                 @method('DELETE')
                                 <button type="submit" onclick="return confirm('Delete this product?')">Delete</button>
@@ -189,7 +189,7 @@
             <label for="product_id">Select a product:</label>
             <select name="product_id" id="product_id">
                 @foreach($products as $p)
-                    <option value="{{ $p->id }}">{{ $p->name }}</option>
+                    <option value="{{ $p['id'] }}">{{ $p['name'] }}</option>
                 @endforeach
             </select>
             <button type="submit">Add to Cart</button>

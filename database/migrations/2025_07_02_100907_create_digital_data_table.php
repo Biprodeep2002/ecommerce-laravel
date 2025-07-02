@@ -11,9 +11,10 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('products', function (Blueprint $table) {
-            //
-            $table->timestamps();
+        Schema::create('digital_data', function (Blueprint $table) {
+            $table->unsignedBigInteger('id')->primary(); // same as product id
+            $table->decimal('filesize', 8, 2)->nullable();
+            $table->foreign('id')->references('id')->on('products')->onDelete('cascade');
         });
     }
 
@@ -22,9 +23,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::table('products', function (Blueprint $table) {
-            //
-            $table->dropTimestamps();
-        });
+        Schema::dropIfExists('digital_data');
     }
 };
